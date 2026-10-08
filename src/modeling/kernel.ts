@@ -169,11 +169,50 @@ export function shapeToBody(shape: Shape3D, name: string, tolerance = 0.02, angu
   const indices = new Uint32Array(m.triangles);
   const faces: FaceInfo[] = m.faceGroups.map((g) => ({ triStart: g.start / 3, triCount: g.count / 3, sourceId: g.faceId }));
   const em = shape.meshEdges({ tolerance, angularTolerance });
-  const edges = em.edgeGroups.flatMap((g) => {
+  const seams = seamEdgeIds(shape);
+  const edges = em.edgeGroups.filter((g) => !seams.has(g.edgeId)).flatMap((g) => {
     const seg: number[] = [];
     // lines holds consecutive segment endpoint pairs (xyz each); start/count are in points.
     for (let i = g.start; i < g.start + g.count; i += 2) seg.push(...em.lines.slice(i * 3, i * 3 + 6));
     return chainSegments(seg).map((c) => ({ points: c.points, closed: c.closed, sourceId: g.edgeId }));
   });
   return { name, positions, normals, indices, faces, edges: mergeCoCircularArcs(edges, 1e-3) };
+}
+
+/**
+ * Edges SolidWorks does not draw: seams where OpenCascade splits one periodic
+ * surface (cylinder, cone, sphere, torus) into two faces of the same type that
+ * meet smoothly.
+ */
+function seamEdgeIds(shape: Shape3D): Set<number> {
+  const out = new Set<number>();
+  try {
+    const faces = shape.faces;
+    const byEdge = new Map<number, { face: (typeof faces)[number]; edge: (typeof faces)[number]['edges'][number] }[]>();
+    for (const face of faces) {
+      for (const edge of face.edges) {
+        const h = edge.hashCode;
+        let l = byEdge.get(h);
+        if (!l) byEdge.set(h, (l = []));
+        l.push({ face, edge });
+      }
+    }
+    for (const [h, l] of byEdge) {
+      // In a closed solid every real edge bounds two faces; a seam bounds one.
+      if (l.length === 1 || (l.length === 2 && l[0].face.hashCode === l[1].face.hashCode)) {
+        if (l[0].face.geomType !== 'PLANE') out.add(h);
+        continue;
+      }
+      if (l.length !== 2) continue;
+      const [a, b] = l;
+      const t = a.face.geomType;
+      if (t === 'PLANE' || t !== b.face.geomType) continue;
+      const p = a.edge.pointAt(0.5);
+      const n1 = a.face.normalAt(p), n2 = b.face.normalAt(p);
+      if (n1.x * n2.x + n1.y * n2.y + n1.z * n2.z > 0.9999) out.add(h);
+    }
+  } catch {
+    /* topology exploration is best effort */
+  }
+  return out;
 }

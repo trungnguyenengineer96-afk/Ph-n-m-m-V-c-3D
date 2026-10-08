@@ -165,6 +165,11 @@ describe('feature regeneration', () => {
     expect(tube.status.every((s) => s.ok)).toBe(true);
     mp = massProperties([shapeToBody(tube.shape!, 't', 0.005, 0.05)]);
     expect(mp.volume / (Math.PI * (64 - 25) * 30)).toBeCloseTo(1, 2);
+    // Only the four circles are drawn; the cylinder seam lines are hidden.
+    const tb = shapeToBody(tube.shape!, 't');
+    const kinds = tb.edges.map((e) => analyseEdge(e, 0.01).kind);
+    expect(kinds.filter((k) => k === 'circle').length).toBe(4);
+    expect(kinds.filter((k) => k === 'line').length).toBe(0);
   });
   it('reports failing features and keeps the previous shape', () => {
     const f = base();
