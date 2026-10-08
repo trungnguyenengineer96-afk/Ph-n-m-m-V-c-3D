@@ -38,6 +38,7 @@ if(WIN32)
   if(NOT CVIMPORT_DLL_DIRS)
     set(CVIMPORT_DLL_DIRS "${OpenCASCADE_BINARY_DIR}" "${OpenCASCADE_INSTALL_PREFIX}/bin")
   endif()
+  file(TO_CMAKE_PATH "${CVIMPORT_DLL_DIRS}" CVIMPORT_DLL_DIRS)  # backslashes break install(CODE)
   install(CODE "set(CVIMPORT_DLL_DIRS \"${CVIMPORT_DLL_DIRS}\")")
   # The MSVC runtime, so users need no Visual C++ redistributable.
   set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
