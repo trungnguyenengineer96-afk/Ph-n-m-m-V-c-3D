@@ -44,7 +44,18 @@ Lõi hình học là OpenCascade (qua thư viện replicad). Lõi này được 
 | DXF `.dxf` | LINE, (LW)POLYLINE có bulge, CIRCLE, ARC, ELLIPSE, SPLINE, TEXT/MTEXT, INSERT (block), DIMENSION | Đo trên bản vẽ 2D |
 | STL, OBJ, glTF/GLB, 3MF, PLY | Lưới tam giác | "Mặt" được nhận dạng theo góc pháp tuyến |
 
-## Chạy phần mềm
+## Cài đặt trên Windows (khuyên dùng)
+
+Tải **CAD-Viewer-3D-Setup-x.y.z.exe** ở trang [Releases](https://github.com/trungnguyenengineer96-afk/Ph-n-m-m-V-c-3D/releases), chạy rồi bấm *Next* để cài. Sau khi cài xong:
+
+- Có biểu tượng **CAD Viewer 3D** trên Desktop và trong Start Menu. Không cần Node.js, không cần cửa sổ lệnh.
+- Nhấp đúp tệp `.step/.stp/.igs/.sldprt/.sldasm/.slddrw/.dxf/.stl/.cvpart` để mở bằng phần mềm. Lần đầu, Windows có thể hỏi chọn ứng dụng: chọn *CAD Viewer 3D*.
+- Chạy hoàn toàn offline. Tệp không gửi đi đâu.
+- Bộ cài chưa có chữ ký số nên Windows SmartScreen có thể cảnh báo. Bấm *More info → Run anyway*.
+
+Tự build bộ cài: `npm run dist:win` (trên Windows; trên Linux cần Wine). Kết quả nằm ở thư mục `release/`.
+
+## Chạy phần mềm (bản web, cho lập trình viên)
 
 Cần Node.js 18 trở lên.
 
@@ -92,6 +103,7 @@ Trên thanh công cụ có menu **Tệp mẫu** gồm một lắp ráp STEP, cá
 - **SLDPRT**: hình hiển thị là lưới tam giác do SolidWorks lưu sẵn. Vì vậy đo trên mặt cong là đo trên lưới, trừ mặt trụ và mặt côn: bán kính của chúng lấy chính xác từ tệp. Không đọc được cây feature, sketch hay cấu hình. Tệp trước SolidWorks 2011 chỉ hiện được ảnh xem trước.
 - **SLDASM**: đọc được cây thành phần, vị trí và lưới lưu sẵn (cấu trúc `COMPINSTANCETREE` và `FaceTessellations`, kiểm chứng trên tệp SolidWorks 2023). Chưa đọc được ràng buộc (mates) dưới dạng có thể chỉnh sửa, và chưa đọc được màu.
 - **SLDDRW**: hiển thị ảnh các trang bản vẽ lưu trong tệp. Để đo trên bản vẽ, hãy xuất **DXF**. DWG chưa được hỗ trợ.
+- **Tốc độ đọc STEP**: phần chậm nhất là lõi OpenCascade (WebAssembly) phân tích tệp, khoảng 1 MB/giây; tệp 10 MB mất khoảng 9 giây. Lần mở lại cùng tệp lấy từ bộ nhớ đệm và gần như tức thì. Nhiều tệp được đọc song song.
 - Thể tích và khối lượng tính trên lưới tam giác. Sai số phụ thuộc độ mịn lưới, chỉnh trong *Cài đặt → Độ mịn lưới* cho STEP/IGES.
 
 - **Dựng hình** mới ở giai đoạn 1–2: sketch, Extrude, Revolve, Cut, Fillet, Chamfer, Shell, Mirror. Chưa có: Sweep/Loft, Pattern, Hole Wizard, Trim/Offset trong sketch, lắp ráp có ràng buộc, tạo bản vẽ 2D từ mô hình. Cạnh/mặt cho Fillet/Shell được tham chiếu theo vị trí, nên khi sửa kích thước làm cạnh dịch chuyển xa thì cần chọn lại.

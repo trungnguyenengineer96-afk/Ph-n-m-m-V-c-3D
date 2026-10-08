@@ -1,7 +1,7 @@
 {
   "name": "cad-viewer-3d",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Phần mềm xem CAD 3D: STEP/IGES, SolidWorks SLDPRT/SLDASM/SLDDRW, DXF — đo đạc, mặt cắt, tách rời (exploded view)",
   "type": "module",
   "scripts": {
@@ -9,25 +9,122 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "desktop": "vite build && electron .",
+    "dist:win": "vite build && electron-builder --win nsis --x64 --publish never"
   },
-  "dependencies": {
+  "devDependencies": {
     "@salusoft89/planegcs": "^1.3.0",
+    "@types/node": "^26.6.4",
+    "@types/pako": "^2.0.4",
+    "@types/three": "^0.186.0",
     "cfb": "^1.2.2",
     "dxf-parser": "^1.1.2",
+    "electron": "^37.10.3",
+    "electron-builder": "^26.15.3",
     "occt-import-js": "^0.0.23",
     "pako": "^3.0.2",
     "replicad": "^1.1.0",
     "replicad-opencascadejs": "^1.1.0",
-    "three": "^0.186.1"
-  },
-  "devDependencies": {
-    "@types/node": "^26.6.4",
-    "@types/pako": "^2.0.4",
-    "@types/three": "^0.186.0",
+    "three": "^0.186.1",
     "three-mesh-bvh": "^0.9.16",
     "typescript": "^5.9.3",
     "vite": "^6.4.4",
     "vitest": "^3.2.7"
+  },
+  "main": "electron/main.cjs",
+  "author": {
+    "name": "CAD Viewer 3D"
+  },
+  "homepage": "https://github.com/trungnguyenengineer96-afk/Ph-n-m-m-V-c-3D",
+  "build": {
+    "appId": "vn.cadviewer3d.app",
+    "productName": "CAD Viewer 3D",
+    "artifactName": "CAD-Viewer-3D-Setup-${version}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "dist/**/*.wasm"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "step",
+          "stp"
+        ],
+        "name": "STEP",
+        "description": "Mô hình STEP"
+      },
+      {
+        "ext": [
+          "iges",
+          "igs"
+        ],
+        "name": "IGES",
+        "description": "Mô hình IGES"
+      },
+      {
+        "ext": "sldprt",
+        "name": "SLDPRT",
+        "description": "Chi tiết SolidWorks"
+      },
+      {
+        "ext": "sldasm",
+        "name": "SLDASM",
+        "description": "Lắp ráp SolidWorks"
+      },
+      {
+        "ext": "slddrw",
+        "name": "SLDDRW",
+        "description": "Bản vẽ SolidWorks"
+      },
+      {
+        "ext": "dxf",
+        "name": "DXF",
+        "description": "Bản vẽ DXF"
+      },
+      {
+        "ext": "stl",
+        "name": "STL",
+        "description": "Lưới STL"
+      },
+      {
+        "ext": "cvpart",
+        "name": "CVPART",
+        "description": "Chi tiết CAD Viewer 3D"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CAD Viewer 3D",
+      "installerLanguages": [
+        "vi_VN",
+        "en_US"
+      ],
+      "language": "1066"
+    }
   }
 }

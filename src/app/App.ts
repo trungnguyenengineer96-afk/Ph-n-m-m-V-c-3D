@@ -4,6 +4,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import type { LoadedModel, ModelNode } from '../core/types';
 import { settings, type LengthUnit } from '../core/units';
 import { ACCEPT, isSupported, loadFile, QUALITY } from '../loaders';
+import { cacheClear } from '../loaders/cache';
 import { DocumentView, type BodyMesh, type DisplayMode } from '../viewer/DocumentView';
 import { ExplodeManager } from '../viewer/Explode';
 import { Picker, type Pick } from '../viewer/Picker';
@@ -138,24 +139,44 @@ export class App {
     const skipped = files.length - supported.length;
     if (skipped) toast(`Bỏ qua ${skipped} tệp không hỗ trợ`, 'info');
     if (!supported.length) return;
-    this.busy(true, `Đang đọc ${supported.length} tệp…`);
     const loaded: { file: File; model: LoadedModel }[] = [];
-    for (const f of supported) {
-      try {
-        this.busy(true, `Đang đọc ${f.name} (${fmtBytes(f.size)})…`);
-        const t0 = performance.now();
-        const model = await loadFile(f, this.quality);
-        loaded.push({ file: f, model });
-        this.setStatus(`Đã đọc ${f.name} trong ${((performance.now() - t0) / 1000).toFixed(2)} s`);
-      } catch (e) {
-        console.error(e);
-        toast(`Lỗi đọc ${f.name}: ${(e as Error).message}`, 'error', 7000);
-      }
-    }
+    const t0 = performance.now();
+    const names = supported.map((f) => `${f.name} (${fmtBytes(f.size)})`);
+    let done = 0;
+    const tick = () => {
+      const s = ((performance.now() - t0) / 1000).toFixed(0);
+      const left = supported.length - done;
+      this.busy(true, left === 1 && supported.length === 1 ? `Đang đọc ${names[0]}… ${s} s` : `Đang đọc ${left}/${supported.length} tệp… ${s} s`);
+    };
+    tick();
+    const timer = window.setInterval(tick, 500);
+    // Files load concurrently (STEP/IGES use a small worker pool).
+    const results = await Promise.all(
+      supported.map(async (f) => {
+        try {
+          const t1 = performance.now();
+          const model = await loadFile(f, this.quality);
+          const sec = (performance.now() - t1) / 1000;
+          if (!model.info.properties['Thời gian đọc']) model.info.properties['Thời gian đọc'] = `${sec.toFixed(2)} s`;
+          return { file: f, model };
+        } catch (e) {
+          console.error(e);
+          toast(`Lỗi đọc ${f.name}: ${(e as Error).message}`, 'error', 7000);
+          return null;
+        } finally {
+          done++;
+          tick();
+        }
+      }),
+    );
+    clearInterval(timer);
+    for (const r of results) if (r) loaded.push(r);
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
     // Link SolidWorks assemblies with part files opened together.
     const consumed = mergeAssemblyReferences(loaded.map((l) => l.model));
     for (const l of loaded) if (!consumed.has(l.model)) this.addDocument(l.model);
     this.busy(false);
+    if (loaded.length) this.setStatus(`Đã đọc ${loaded.length} tệp trong ${elapsed} s`);
   }
 
   addDocument(model: LoadedModel, studio?: PartStudio) {
@@ -958,6 +979,18 @@ export class App {
       h('div', { class: 'field' }, h('label', {}, 'Kiểu xoay'), style),
       h('div', { class: 'field' }, h('label', {}, 'Tốc độ xoay (độ / pixel)'), speed),
       h('label', { class: 'check' }, invert, 'Đảo chiều con lăn khi phóng to'),
+      h(
+        'button',
+        {
+          class: 'btn',
+          onclick: async () => {
+            await cacheClear();
+            toast('Đã xoá bộ nhớ đệm mô hình', 'ok');
+          },
+        },
+        'Xoá bộ nhớ đệm mô hình',
+      ),
+      h('div', { class: 'hint' }, 'Tệp STEP/IGES/SolidWorks lớn được lưu đệm sau lần đọc đầu, nên mở lại gần như tức thì.'),
     );
     dlg.onClose = () => {
       settings.length = unit.value as LengthUnit;

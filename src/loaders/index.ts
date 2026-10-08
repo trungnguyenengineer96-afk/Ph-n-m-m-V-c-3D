@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { LoadedModel, Vec3 } from '../core/types';
 import type { OcctResult, RawMesh, RawNode } from './convert';
 import type { WorkerRequest, WorkerResponse } from './parse.worker';
+import { cacheGet, cacheKey, cachePut } from './cache';
 
 export const SUPPORTED = {
   solidworks: ['sldprt', 'sldasm', 'slddrw', 'prtdot', 'asmdot', 'drwdot'],
@@ -24,9 +25,8 @@ export function isSupported(name: string) {
 
 // ---------- worker plumbing ----------
 let parseWorker: Worker | null = null;
-let occtWorker: Worker | null = null;
 let seq = 1;
-const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; worker: Worker }>();
 
 function onReply(ev: MessageEvent<{ id: number; error?: string }>) {
   const p = pending.get(ev.data.id);
@@ -44,23 +44,44 @@ function getParseWorker() {
   return parseWorker;
 }
 
+/**
+ * A small pool of OpenCascade workers so several STEP/IGES files load in
+ * parallel. Each worker holds its own WebAssembly instance, so the pool is
+ * kept small to bound memory.
+ */
+const OCCT_POOL = Math.max(1, Math.min(3, Math.floor((navigator.hardwareConcurrency || 2) / 2)));
+const occtWorkers: Worker[] = [];
+
+function busyCount(w: Worker) {
+  let n = 0;
+  for (const p of pending.values()) if (p.worker === w) n++;
+  return n;
+}
+
 function getOcctWorker() {
-  if (!occtWorker) {
-    occtWorker = new Worker(new URL(`${import.meta.env.BASE_URL}occt/occt-worker.js`, location.href));
-    occtWorker.onmessage = onReply;
-    occtWorker.onerror = (e) => {
-      for (const [, p] of pending) p.reject(new Error('Lỗi tải OpenCascade: ' + (e.message || 'không rõ')));
-      pending.clear();
-      occtWorker = null;
+  const idle = occtWorkers.find((w) => busyCount(w) === 0);
+  if (idle) return idle;
+  if (occtWorkers.length < OCCT_POOL) {
+    const w = new Worker(new URL(`${import.meta.env.BASE_URL}occt/occt-worker.js`, location.href));
+    w.onmessage = onReply;
+    w.onerror = (e) => {
+      for (const [id, p] of pending)
+        if (p.worker === w) {
+          p.reject(new Error('Lỗi tải OpenCascade: ' + (e.message || 'không rõ')));
+          pending.delete(id);
+        }
+      occtWorkers.splice(occtWorkers.indexOf(w), 1);
     };
+    occtWorkers.push(w);
+    return w;
   }
-  return occtWorker;
+  return occtWorkers.reduce((a, b) => (busyCount(b) < busyCount(a) ? b : a));
 }
 
 function call<T>(w: Worker, msg: Record<string, unknown>, transfer: Transferable[] = []): Promise<T> {
   const id = seq++;
   return new Promise<T>((resolve, reject) => {
-    pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+    pending.set(id, { resolve: resolve as (v: unknown) => void, reject, worker: w });
     w.postMessage({ ...msg, id }, transfer);
   });
 }
@@ -167,6 +188,22 @@ async function loadMeshFormat(buffer: ArrayBuffer, fileName: string): Promise<Lo
 
 export async function loadFile(file: File, quality: TessellationQuality = QUALITY.normal): Promise<LoadedModel> {
   const e = extOf(file.name);
+  const isOcct = SUPPORTED.occt.includes(e);
+  const cacheable = isOcct || SUPPORTED.solidworks.includes(e);
+  const key = cacheKey(file, isOcct ? `${quality.linearDeflection}/${quality.angularDeflection}` : 'sw');
+  if (cacheable && file.size > 256 * 1024) {
+    const hit = await cacheGet(key);
+    if (hit) {
+      hit.info.properties['Nguồn'] = 'Bộ nhớ đệm (mở lại nhanh)';
+      return hit;
+    }
+  }
+  const model = await loadUncached(file, e, quality);
+  if (cacheable && file.size > 256 * 1024) void cachePut(key, model);
+  return model;
+}
+
+async function loadUncached(file: File, e: string, quality: TessellationQuality): Promise<LoadedModel> {
   const buffer = await file.arrayBuffer();
   if (SUPPORTED.solidworks.includes(e)) return parseInWorker({ type: 'sw', buffer, fileName: file.name }, [buffer]);
   if (SUPPORTED.drawing.includes(e)) return parseInWorker({ type: 'dxf', buffer, fileName: file.name }, [buffer]);
