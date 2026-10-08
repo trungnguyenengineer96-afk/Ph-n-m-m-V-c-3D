@@ -1,6 +1,6 @@
 /** Rendering core: renderer, cameras, controls, lights, view orientation, orientation triad. */
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CadControls } from './CadControls';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 export type ViewName = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom' | 'iso' | 'dimetric' | 'trimetric';
@@ -29,7 +29,8 @@ export class Viewer {
   readonly ortho: THREE.OrthographicCamera;
   readonly persp: THREE.PerspectiveCamera;
   camera: THREE.OrthographicCamera | THREE.PerspectiveCamera;
-  readonly controls: OrbitControls;
+  readonly controls: CadControls;
+  private pivotMarker: THREE.Points;
   private readonly headlight = new THREE.DirectionalLight(0xffffff, 1.6);
   private readonly hemi = new THREE.HemisphereLight(0xf4f7ff, 0x8a8f98, 1.1);
   private needsRender = true;
@@ -67,16 +68,26 @@ export class Viewer {
     this.headlight.position.set(0.3, 0.6, 1);
     this.scene.add(this.camera);
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = false;
-    this.controls.zoomToCursor = true;
-    this.controls.screenSpacePanning = true;
-    this.controls.rotateSpeed = 0.9;
-    this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
+    this.controls = new CadControls(this.camera, this.renderer.domElement);
+    this.controls.fallbackPivot = () => this.modelCenter.clone();
     this.controls.addEventListener('change', () => {
+      this.updatePerspClip();
       this.requestRender();
       for (const f of this.onCameraChange) f();
     });
+    // Small marker showing the rotation centre while dragging (like SolidWorks).
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
+    this.pivotMarker = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xe0301e, size: 9, sizeAttenuation: false, depthTest: false }));
+    this.pivotMarker.renderOrder = 100;
+    this.pivotMarker.visible = false;
+    this.pivotMarker.raycast = () => {};
+    this.scene.add(this.pivotMarker);
+    this.controls.onPivot = (p) => {
+      this.pivotMarker.visible = !!p;
+      if (p) this.pivotMarker.position.copy(p);
+      this.requestRender();
+    };
 
     this.buildTriad();
     new ResizeObserver(() => this.resize()).observe(container);
@@ -168,6 +179,7 @@ export class Viewer {
     this.controls.minDistance = this.modelRadius * 1e-4;
     this.controls.maxZoom = 1e5;
     this.controls.minZoom = 0.01;
+    this.updatePerspClip();
   }
 
   setView(name: ViewName, box: THREE.Box3 | null) {
@@ -311,6 +323,19 @@ export class Viewer {
     for (const l of this.triadLabels) l.el.style.display = v ? '' : 'none';
   }
 
+  /** Keep perspective near/far planes proportional to the viewing distance. */
+  private updatePerspClip() {
+    if (this.camera !== this.persp) return;
+    const d = this.persp.position.distanceTo(this.controls.target);
+    const near = Math.max(d / 2000, 1e-3);
+    const far = d + this.modelRadius * 50;
+    if (Math.abs(near - this.persp.near) > near * 0.01 || Math.abs(far - this.persp.far) > far * 0.01) {
+      this.persp.near = near;
+      this.persp.far = far;
+      this.persp.updateProjectionMatrix();
+    }
+  }
+
   /** World-space size of one screen pixel at the target. */
   pixelSize(): number {
     const h = Math.max(1, this.container.clientHeight);
@@ -321,10 +346,7 @@ export class Viewer {
 
   set2DMode(on: boolean) {
     this.is2D = on;
-    this.controls.enableRotate = !on;
-    this.controls.mouseButtons = on
-      ? { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }
-      : { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN };
+    this.controls.lock2D = on;
     this.setTriadVisible(!on);
   }
 

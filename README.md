@@ -43,9 +43,11 @@ Trên thanh công cụ có menu **Tệp mẫu** gồm một lắp ráp STEP, cá
 
 | Thao tác | Chức năng |
 |---|---|
-| Kéo chuột trái hoặc chuột giữa | Xoay |
-| Kéo chuột phải | Di chuyển (pan) |
-| Con lăn | Phóng to/thu nhỏ tại vị trí con trỏ |
+| Kéo chuột trái hoặc chuột giữa | Xoay quanh điểm dưới con trỏ (dấu chấm đỏ là tâm xoay) |
+| Kéo chuột phải, Ctrl + chuột giữa | Di chuyển (pan) |
+| Con lăn, Shift + kéo chuột giữa | Phóng to/thu nhỏ tại vị trí con trỏ |
+| `←` `→` `↑` `↓` (giữ Shift: 90°) | Xoay 15° |
+| `Alt` + `←` `→` | Xoay quanh hướng nhìn (roll) |
 | Nhấp đúp vào mặt | Nhìn vuông góc (Normal To) |
 | Chuột phải (không kéo) | Menu: Ẩn / Cô lập / Trong suốt / Normal To |
 | `F` | Vừa màn hình |
@@ -57,6 +59,8 @@ Trên thanh công cụ có menu **Tệp mẫu** gồm một lắp ráp STEP, cá
 | `T` / `R` | Gizmo tịnh tiến / xoay (khi tách rời) |
 | `Ctrl+O` | Mở tệp |
 | `Esc` | Thoát công cụ |
+
+*Cài đặt* có thêm lựa chọn kiểu xoay (tự do như SolidWorks, hoặc bàn xoay giữ trục Y thẳng đứng), tốc độ xoay và chiều con lăn.
 
 Đo: nhấp chọn đỉnh, cạnh hoặc mặt (con trỏ tự bắt điểm). Ctrl + nhấp để chọn thêm đối tượng thứ hai. Chọn ≥ 3 đối tượng để xem tổng diện tích hoặc tổng chiều dài.
 

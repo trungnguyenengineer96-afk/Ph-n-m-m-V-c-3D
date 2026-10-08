@@ -69,6 +69,9 @@ export class App {
   constructor() {
     this.viewer = new Viewer(this.el.viewport);
     this.picker = new Picker(this.viewer, () => this.active?.view ?? null);
+    // Rotate and zoom about the model point under the cursor.
+    this.viewer.controls.pickPoint = (x, y) => this.picker.raycastFace(x, y)?.point ?? null;
+    loadNavSettings(this.viewer);
     this.section = new SectionManager(this.viewer.overlay, () => this.viewer.requestRender());
     this.explode = new ExplodeManager(() => this.viewer.requestRender());
     this.measure = new MeasureTool(this.viewer, this.picker, () => this.active?.view.tolerance ?? 0.001);
@@ -676,6 +679,18 @@ export class App {
         this.el.fileInput.click();
         return;
       }
+      if (e.key.startsWith('Arrow') && this.active && !this.viewer.is2D && !e.ctrlKey && !e.metaKey) {
+        // SolidWorks: arrows rotate 15° (Shift: 90°), Alt + ←/→ rolls the view.
+        e.preventDefault();
+        const step = e.shiftKey ? 90 : 15;
+        const c = this.viewer.controls;
+        if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) c.rollBy(e.key === 'ArrowLeft' ? step : -step);
+        else if (e.key === 'ArrowLeft') c.rotateBy(-step, 0);
+        else if (e.key === 'ArrowRight') c.rotateBy(step, 0);
+        else if (e.key === 'ArrowUp') c.rotateBy(0, -step);
+        else if (e.key === 'ArrowDown') c.rotateBy(0, step);
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const box = this.active?.view.bounds(true) ?? null;
       const views: Record<string, ViewName> = { '1': 'front', '2': 'back', '3': 'left', '4': 'right', '5': 'top', '6': 'bottom', '7': 'iso' };
@@ -749,17 +764,34 @@ export class App {
       h('option', { value: 'high' }, 'Cao (mịn, chậm)'),
     ) as HTMLSelectElement;
     q.value = Object.entries(QUALITY).find(([, v]) => v === this.quality)?.[0] ?? 'normal';
+    const c = this.viewer.controls;
+    const style = h(
+      'select',
+      {},
+      h('option', { value: 'free', selected: c.rotateStyle === 'free' }, 'Tự do quanh điểm con trỏ (như SolidWorks)'),
+      h('option', { value: 'turntable', selected: c.rotateStyle === 'turntable' }, 'Bàn xoay — giữ trục Y thẳng đứng'),
+    ) as HTMLSelectElement;
+    const speed = h('input', { type: 'number', min: '0.1', max: '2', step: '0.05', value: String(c.rotateSpeed), class: 'num' }) as HTMLInputElement;
+    const invert = h('input', { type: 'checkbox' }) as HTMLInputElement;
+    invert.checked = c.invertWheel;
     const dlg = modal(
       'Cài đặt',
       h('div', { class: 'field' }, h('label', {}, 'Đơn vị chiều dài hiển thị'), unit),
       h('div', { class: 'field' }, h('label', {}, 'Số chữ số thập phân'), dec),
       h('div', { class: 'field' }, h('label', {}, 'Độ mịn lưới khi đọc STEP/IGES'), q),
       h('div', { class: 'hint' }, 'Độ mịn áp dụng cho tệp mở sau khi thay đổi.'),
+      h('div', { class: 'field' }, h('label', {}, 'Kiểu xoay'), style),
+      h('div', { class: 'field' }, h('label', {}, 'Tốc độ xoay (độ / pixel)'), speed),
+      h('label', { class: 'check' }, invert, 'Đảo chiều con lăn khi phóng to'),
     );
     dlg.onClose = () => {
       settings.length = unit.value as LengthUnit;
       settings.decimals = Math.max(0, Math.min(8, Number(dec.value) || 3));
       this.quality = QUALITY[q.value];
+      c.rotateStyle = style.value as 'free' | 'turntable';
+      c.rotateSpeed = Math.max(0.05, Math.min(3, Number(speed.value) || 0.4));
+      c.invertWheel = invert.checked;
+      saveNavSettings(this.viewer);
       this.updateStatusUnits();
       if (this.measure.selection.length) this.measure.onChange.forEach((f) => f());
     };
@@ -767,9 +799,11 @@ export class App {
 
   private helpDialog() {
     const rows: [string, string][] = [
-      ['Chuột trái kéo / chuột giữa kéo', 'Xoay mô hình'],
-      ['Chuột phải kéo', 'Di chuyển (pan)'],
-      ['Con lăn', 'Phóng to / thu nhỏ tại con trỏ'],
+      ['Chuột trái kéo / chuột giữa kéo', 'Xoay quanh điểm dưới con trỏ'],
+      ['Chuột phải kéo / Ctrl + chuột giữa', 'Di chuyển (pan)'],
+      ['Con lăn / Shift + chuột giữa', 'Phóng to / thu nhỏ tại con trỏ'],
+      ['← → ↑ ↓ (Shift: 90°)', 'Xoay 15°'],
+      ['Alt + ← →', 'Xoay quanh hướng nhìn (roll)'],
       ['Nhấp đúp vào mặt', 'Nhìn vuông góc mặt (Normal To)'],
       ['Chuột phải (không kéo)', 'Menu: Ẩn / Cô lập / Trong suốt…'],
       ['F', 'Vừa màn hình (Zoom to fit)'],
@@ -807,6 +841,27 @@ export class App {
     this.el.busy.hidden = !on;
     const t = this.el.busy.querySelector('.busy-text');
     if (t) t.textContent = msg;
+  }
+}
+
+const NAV_KEY = 'cadviewer.nav';
+function loadNavSettings(v: Viewer) {
+  try {
+    const raw = localStorage.getItem(NAV_KEY);
+    if (!raw) return;
+    const o = JSON.parse(raw) as { style?: 'free' | 'turntable'; speed?: number; invert?: boolean };
+    if (o.style) v.controls.rotateStyle = o.style;
+    if (typeof o.speed === 'number') v.controls.rotateSpeed = o.speed;
+    if (typeof o.invert === 'boolean') v.controls.invertWheel = o.invert;
+  } catch {
+    /* storage unavailable */
+  }
+}
+function saveNavSettings(v: Viewer) {
+  try {
+    localStorage.setItem(NAV_KEY, JSON.stringify({ style: v.controls.rotateStyle, speed: v.controls.rotateSpeed, invert: v.controls.invertWheel }));
+  } catch {
+    /* storage unavailable */
   }
 }
 
