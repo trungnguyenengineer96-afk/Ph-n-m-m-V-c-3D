@@ -336,11 +336,11 @@ int run(const std::vector<std::string>& argv) {
     } else {
       throw std::runtime_error("unsupported extension: " + ext);
     }
-  } catch (const std::exception& e) {
-    std::cerr << "error: " << e.what() << "\n";
-    return 1;
   } catch (const Standard_Failure& e) {
     std::cerr << "error: " << e.GetMessageString() << "\n";
+    return 1;
+  } catch (const std::exception& e) {
+    std::cerr << "error: " << e.what() << "\n";
     return 1;
   }
   const auto t1 = std::chrono::steady_clock::now();
@@ -432,15 +432,9 @@ int run(const std::vector<std::string>& argv) {
 // File names are passed to OpenCascade as UTF-8; on Windows read the wide
 // command line so paths with non-ASCII characters (e.g. Vietnamese) work.
 #ifdef _WIN32
-#include <windows.h>
 int wmain(int argc, wchar_t** wargv) {
   std::vector<std::string> args;
-  for (int i = 0; i < argc; i++) {
-    const int n = WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, nullptr, 0, nullptr, nullptr);
-    std::string a(n > 0 ? n - 1 : 0, '\0');
-    if (n > 1) WideCharToMultiByte(CP_UTF8, 0, wargv[i], -1, &a[0], n, nullptr, nullptr);
-    args.push_back(a);
-  }
+  for (int i = 0; i < argc; i++) args.push_back(std::filesystem::path(wargv[i]).u8string());
   return run(args);
 }
 #else

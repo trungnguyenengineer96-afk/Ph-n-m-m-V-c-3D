@@ -28,7 +28,7 @@ message(STATUS "cvimport links: ${CVIMPORT_LIBS}")
 target_link_libraries(cvimport PRIVATE ${CVIMPORT_LIBS})
 if(MSVC)
   target_compile_options(cvimport PRIVATE /utf-8 /EHsc)
-  target_compile_definitions(cvimport PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_compile_definitions(cvimport PRIVATE NOMINMAX)
 endif()
 
 # `cmake --install` copies the executable plus the non-system DLLs it needs.
