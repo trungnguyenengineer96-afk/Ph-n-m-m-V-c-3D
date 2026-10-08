@@ -104,6 +104,10 @@ export const QUALITY: Record<string, TessellationQuality> = {
   high: { linearDeflection: 0.0003, angularDeflection: 0.25 },
 };
 
+interface DesktopImport {
+  importNative?(name: string, data: ArrayBuffer, linearDeflection: number, angularDeflection: number): Promise<ArrayBuffer>;
+}
+
 async function loadOcct(buffer: ArrayBuffer, fileName: string, quality: TessellationQuality): Promise<LoadedModel> {
   const e = extOf(fileName);
   const format = e === 'step' || e === 'stp' ? 'step' : e === 'iges' || e === 'igs' ? 'iges' : 'brep';
@@ -114,13 +118,24 @@ async function loadOcct(buffer: ArrayBuffer, fileName: string, quality: Tessella
     linearDeflection: quality.linearDeflection,
     angularDeflection: quality.angularDeflection,
   };
+  const label = { step: 'STEP (ISO 10303)', iges: 'IGES', brep: 'OpenCascade BREP' }[format];
+  // Desktop app: the bundled native OpenCascade importer is several times faster
+  // than the WebAssembly build; fall back to WebAssembly if it fails.
+  const desktop = (globalThis as { cadDesktop?: DesktopImport }).cadDesktop;
+  if (desktop?.importNative) {
+    try {
+      const out = await desktop.importNative(fileName, buffer, quality.linearDeflection, quality.angularDeflection);
+      return await parseInWorker({ type: 'cvmesh', buffer: out, fileName, format: label, fileSize: size }, [out]);
+    } catch (e) {
+      console.warn('Native importer failed, using WebAssembly:', e);
+    }
+  }
   const res = await call<{ result: OcctResult }>(getOcctWorker(), { format, buffer, params }, [buffer]);
   const transfer: Transferable[] = [];
   for (const m of res.result.meshes) {
     transfer.push(m.attributes.position.array.buffer as ArrayBuffer, m.index.array.buffer as ArrayBuffer);
     if (m.attributes.normal) transfer.push(m.attributes.normal.array.buffer as ArrayBuffer);
   }
-  const label = { step: 'STEP (ISO 10303)', iges: 'IGES', brep: 'OpenCascade BREP' }[format];
   return parseInWorker({ type: 'occt', result: res.result, fileName, format: label, fileSize: size }, transfer);
 }
 

@@ -6,6 +6,8 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, net, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
+const { execFile } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
 const DIST = path.join(__dirname, '..', 'dist');
@@ -56,6 +58,35 @@ async function openDialog() {
     ],
   });
   if (!r.canceled) sendFiles(r.filePaths);
+}
+
+// ---- native STEP/IGES importer (native/cvimport.cpp) ----
+function nativeImporter() {
+  const exe = process.platform === 'win32' ? 'cvimport.exe' : 'cvimport';
+  const candidates = app.isPackaged
+    ? [path.join(process.resourcesPath, 'native', exe)]
+    : [path.join(__dirname, '..', 'native-bin', exe), path.join(__dirname, '..', 'native', 'build', exe)];
+  return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
+async function nativeImport(name, data, linear, angular) {
+  const exe = nativeImporter();
+  if (!exe) throw new Error('Không có bộ đọc gốc');
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'cadviewer-'));
+  const input = path.join(dir, 'input' + (path.extname(name).toLowerCase() || '.step'));
+  const output = path.join(dir, 'output.cvmesh');
+  try {
+    await fs.promises.writeFile(input, Buffer.from(data));
+    await new Promise((resolve, reject) => {
+      execFile(exe, [input, output, String(linear), String(angular)], { windowsHide: true, timeout: 15 * 60 * 1000 }, (err, _out, stderr) =>
+        err ? reject(new Error(String(stderr || '').trim() || err.message)) : resolve(),
+      );
+    });
+    const buf = await fs.promises.readFile(output);
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  } finally {
+    fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function createWindow() {
@@ -146,6 +177,8 @@ if (!app.requestSingleInstanceLock()) {
       return new Response(res.body, { status: res.status, headers: { 'content-type': type } });
     });
     ipcMain.handle('open-dialog', openDialog);
+    ipcMain.handle('native-import', (_e, name, data, linear, angular) => nativeImport(name, data, linear, angular));
+    ipcMain.on('native-available', (e) => (e.returnValue = !!nativeImporter()));
     buildMenu();
     pendingFiles = filesFromArgv(process.argv);
     createWindow();

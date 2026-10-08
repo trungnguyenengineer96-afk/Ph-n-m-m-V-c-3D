@@ -19,6 +19,35 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
+      # Native STEP/IGES importer: OpenCascade from conda-forge, built with MSVC.
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: occt
+          create-args: occt
+          cache-environment: true
+      - name: Build native importer
+        shell: pwsh
+        run: |
+          $lib = Join-Path $env:MAMBA_ROOT_PREFIX 'envs\occt\Library'
+          Get-ChildItem -Recurse -Filter OpenCASCADEConfig.cmake $lib | Select-Object -First 1 FullName
+          cmake -S native -B native/build -DCMAKE_PREFIX_PATH="$lib" -DCVIMPORT_DLL_DIRS="$lib/bin"
+          if ($LASTEXITCODE -ne 0) { throw 'configure failed' }
+          cmake --build native/build --config Release
+          if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+          cmake --install native/build --config Release --prefix native-bin
+          if ($LASTEXITCODE -ne 0) { throw 'install failed' }
+          Get-ChildItem native-bin | Sort-Object Length -Descending | Format-Table Name, Length
+          "Total MB: {0:N1}" -f ((Get-ChildItem native-bin | Measure-Object Length -Sum).Sum / 1MB)
+      # Run with a bare PATH to prove every DLL it needs is bundled.
+      - name: Test native importer
+        shell: pwsh
+        run: |
+          $env:PATH = 'C:\Windows\System32;C:\Windows'
+          & .\native-bin\cvimport.exe public\samples\as1_pe_203_assembly.stp "$env:RUNNER_TEMP\as1.cvmesh"
+          if ($LASTEXITCODE -ne 0) { throw "cvimport exited with $LASTEXITCODE" }
+          & .\native-bin\cvimport.exe public\samples\C04_cube_hole_5mm.step "$env:RUNNER_TEMP\c04.cvmesh"
+          if ($LASTEXITCODE -ne 0) { throw "cvimport exited with $LASTEXITCODE" }
+          Get-Item "$env:RUNNER_TEMP\*.cvmesh" | Format-Table Name, Length
       - run: npm run dist:win
       - name: Read version
         id: ver
@@ -39,3 +68,4 @@ jobs:
           body: |
             Bộ cài Windows (64-bit) của CAD Viewer 3D.
             Tải **CAD-Viewer-3D-Setup-*.exe**, chạy và làm theo hướng dẫn cài đặt.
+            Bản cài kèm bộ đọc STEP/IGES OpenCascade gốc (nhanh hơn bản trình duyệt khoảng 2–2,5 lần).

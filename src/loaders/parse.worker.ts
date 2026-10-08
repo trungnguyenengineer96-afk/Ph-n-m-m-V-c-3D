@@ -4,11 +4,13 @@ import type { LoadedModel } from '../core/types';
 import { loadSolidWorks } from './sw/solidworks';
 import { loadDxf } from './dxf';
 import { fromOcct, fromRawMeshes, type OcctResult, type RawMesh, type RawNode } from './convert';
+import { parseCvMesh } from './cvmesh';
 
 export type WorkerRequest =
   | { id: number; type: 'sw'; buffer: ArrayBuffer; fileName: string }
   | { id: number; type: 'dxf'; buffer: ArrayBuffer; fileName: string }
   | { id: number; type: 'occt'; result: OcctResult; fileName: string; format: string; fileSize: number }
+  | { id: number; type: 'cvmesh'; buffer: ArrayBuffer; fileName: string; format: string; fileSize: number }
   | { id: number; type: 'meshes'; meshes: RawMesh[]; tree: RawNode; fileName: string; format: string; fileSize: number };
 
 export type WorkerResponse = { id: number; model: LoadedModel } | { id: number; error: string };
@@ -55,6 +57,12 @@ self.onmessage = (ev: MessageEvent<WorkerRequest>) => {
       case 'occt':
         model = fromOcct(req.result, req.fileName, req.format, req.fileSize);
         break;
+      case 'cvmesh': {
+        const res = parseCvMesh(req.buffer);
+        model = fromOcct(res, req.fileName, req.format, req.fileSize);
+        if (res.timing) model.info.properties['Bộ đọc'] = `OpenCascade gốc (đọc ${res.timing.read.toFixed(1)} s, chia lưới ${res.timing.mesh.toFixed(1)} s)`;
+        break;
+      }
       case 'meshes':
         model = fromRawMeshes(req.meshes, req.tree, req.fileName, req.format, req.fileSize);
         break;

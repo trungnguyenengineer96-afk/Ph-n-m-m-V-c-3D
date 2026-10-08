@@ -5,3 +5,5 @@ public/occt/occt-import-js.wasm
 *.log
 .DS_Store
 release/
+native/build/
+native-bin/

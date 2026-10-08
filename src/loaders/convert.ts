@@ -14,6 +14,8 @@ export interface OcctNode {
   name: string;
   meshes: number[];
   children: OcctNode[];
+  /** Placement relative to the parent, column-major 4×4 (mm); native importer only. */
+  matrix?: number[];
 }
 export interface OcctResult {
   success: boolean;
@@ -51,6 +53,7 @@ export function fromOcct(res: OcctResult, fileName: string, format: string, file
       bodies: n.meshes.slice(),
       children: (n.children || []).map((c) => conv(c, depth + 1)),
     };
+    if (n.matrix && !isIdentity(n.matrix)) node.matrix = n.matrix;
     // OpenCascade flattens sub-assemblies into one node with several meshes;
     // give each solid its own node so it can be selected, hidden and exploded.
     if (node.bodies.length > 1) {
@@ -78,6 +81,10 @@ export function fromOcct(res: OcctResult, fileName: string, format: string, file
   const info: FileInfo = { format, fileName, fileSize, properties: {}, previews: [], references: [], warnings: [] };
   info.properties['Số thân (body)'] = String(bodies.length);
   return { kind: leafCount > 1 ? 'assembly' : 'part', name: baseName, root, bodies, info };
+}
+
+function isIdentity(m: number[]): boolean {
+  return m.every((v, i) => Math.abs(v - (i % 5 === 0 ? 1 : 0)) < 1e-12);
 }
 
 function countParts(n: ModelNode): number {

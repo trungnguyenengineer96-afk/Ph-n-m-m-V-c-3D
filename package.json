@@ -1,7 +1,7 @@
 {
   "name": "cad-viewer-3d",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Phần mềm xem CAD 3D: STEP/IGES, SolidWorks SLDPRT/SLDASM/SLDDRW, DXF — đo đạc, mặt cắt, tách rời (exploded view)",
   "type": "module",
   "scripts": {
@@ -49,6 +49,12 @@
       "dist/**/*",
       "electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native-bin",
+        "to": "native"
+      }
     ],
     "asar": true,
     "asarUnpack": [

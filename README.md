@@ -36,7 +36,7 @@ Lõi hình học là OpenCascade (qua thư viện replicad). Lõi này được 
 
 | Định dạng | Đọc được | Ghi chú |
 |---|---|---|
-| STEP `.step/.stp` (AP203/AP214/AP242) | Hình học B-rep chính xác, cây lắp ráp, vị trí, màu | Dùng OpenCascade (WebAssembly) |
+| STEP `.step/.stp` (AP203/AP214/AP242) | Hình học B-rep chính xác, cây lắp ráp, vị trí, màu | Dùng OpenCascade (WebAssembly); bản cài Windows dùng OpenCascade gốc (C++), nhanh hơn khoảng 2–2,5 lần |
 | IGES `.igs/.iges`, BREP `.brep` | Hình học, màu | OpenCascade |
 | SolidWorks Part `.SLDPRT` (2011 →) | Lưới hiển thị đúng như SolidWorks lưu, cạnh B-rep, loại mặt (phẳng/trụ/côn) với **bán kính chính xác**, nhiều thân, ảnh xem trước, thuộc tính tuỳ biến | Đọc trực tiếp, không cần cài SolidWorks |
 | SolidWorks Assembly `.SLDASM` (2015 →) | Cây lắp ráp đầy đủ (cụm con, cấu hình đang dùng), **vị trí từng chi tiết** và lưới hình học lưu sẵn trong tệp. Hiển thị được lắp ráp **không cần tệp chi tiết**. Chi tiết nào thiếu lưới thì mở kèm `.SLDPRT` (hoặc STEP cùng tên) để tự nạp vào đúng vị trí | Màu/appearance chưa đọc được |
@@ -53,7 +53,7 @@ Tải **CAD-Viewer-3D-Setup-x.y.z.exe** ở trang [Releases](https://github.com/
 - Chạy hoàn toàn offline. Tệp không gửi đi đâu.
 - Bộ cài chưa có chữ ký số nên Windows SmartScreen có thể cảnh báo. Bấm *More info → Run anyway*.
 
-Tự build bộ cài: `npm run dist:win` (trên Windows; trên Linux cần Wine). Kết quả nằm ở thư mục `release/`.
+Tự build bộ cài: `npm run dist:win` (trên Windows; trên Linux cần Wine). Kết quả nằm ở thư mục `release/`. Bộ đọc STEP gốc được build riêng bằng CMake + OpenCascade (`cmake -S native -B native/build && cmake --build native/build --config Release && cmake --install native/build --config Release --prefix native-bin`) rồi tự đóng gói vào bộ cài; xem `.github/workflows/desktop.yml`.
 
 ## Chạy phần mềm (bản web, cho lập trình viên)
 
@@ -103,7 +103,7 @@ Trên thanh công cụ có menu **Tệp mẫu** gồm một lắp ráp STEP, cá
 - **SLDPRT**: hình hiển thị là lưới tam giác do SolidWorks lưu sẵn. Vì vậy đo trên mặt cong là đo trên lưới, trừ mặt trụ và mặt côn: bán kính của chúng lấy chính xác từ tệp. Không đọc được cây feature, sketch hay cấu hình. Tệp trước SolidWorks 2011 chỉ hiện được ảnh xem trước.
 - **SLDASM**: đọc được cây thành phần, vị trí và lưới lưu sẵn (cấu trúc `COMPINSTANCETREE` và `FaceTessellations`, kiểm chứng trên tệp SolidWorks 2023). Chưa đọc được ràng buộc (mates) dưới dạng có thể chỉnh sửa, và chưa đọc được màu.
 - **SLDDRW**: hiển thị ảnh các trang bản vẽ lưu trong tệp. Để đo trên bản vẽ, hãy xuất **DXF**. DWG chưa được hỗ trợ.
-- **Tốc độ đọc STEP**: phần chậm nhất là lõi OpenCascade (WebAssembly) phân tích tệp, khoảng 1 MB/giây; tệp 10 MB mất khoảng 9 giây. Lần mở lại cùng tệp lấy từ bộ nhớ đệm và gần như tức thì. Nhiều tệp được đọc song song.
+- **Tốc độ đọc STEP**: bản trình duyệt dùng OpenCascade WebAssembly, khoảng 1 MB/giây (tệp 10 MB mất khoảng 9 giây). Bản cài Windows kèm bộ đọc OpenCascade gốc `cvimport.exe` (mã nguồn ở `native/`), cùng tệp đó chỉ mất khoảng 4 giây; nếu bộ đọc gốc lỗi, phần mềm tự quay về bản WebAssembly. Lần mở lại cùng tệp lấy từ bộ nhớ đệm và gần như tức thì. Nhiều tệp được đọc song song.
 - Thể tích và khối lượng tính trên lưới tam giác. Sai số phụ thuộc độ mịn lưới, chỉnh trong *Cài đặt → Độ mịn lưới* cho STEP/IGES.
 
 - **Dựng hình** mới ở giai đoạn 1–2: sketch, Extrude, Revolve, Cut, Fillet, Chamfer, Shell, Mirror. Chưa có: Sweep/Loft, Pattern, Hole Wizard, Trim/Offset trong sketch, lắp ráp có ràng buộc, tạo bản vẽ 2D từ mô hình. Cạnh/mặt cho Fillet/Shell được tham chiếu theo vị trí, nên khi sửa kích thước làm cạnh dịch chuyển xa thì cần chọn lại.
