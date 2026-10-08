@@ -13,6 +13,7 @@
         <div class="brand"><span class="logo"></span><b>CAD Viewer 3D</b></div>
         <div class="ribbon">
           <div class="rgroup">
+            <button class="rbtn" id="btn-new-part" title="Chi tiết mới — dựng hình (sketch, extrude, revolve…)"><span class="ico" data-icon="newpart"></span><span>Chi tiết mới</span></button>
             <button class="rbtn" id="btn-open" title="Mở tệp (Ctrl+O)"><span class="ico" data-icon="open"></span><span>Mở tệp</span></button>
             <button class="rbtn" id="btn-open-dir" title="Mở cả thư mục (lắp ráp SolidWorks + chi tiết)"><span class="ico" data-icon="folder"></span><span>Mở thư mục</span></button>
             <details class="menu">
@@ -49,6 +50,7 @@
           </div>
         </div>
       </header>
+      <div class="model-ribbon" id="model-ribbon" hidden></div>
       <div class="doc-tabs" id="doc-tabs"></div>
       <main class="main">
         <aside class="left">
@@ -97,7 +99,7 @@
               <span class="ico big" data-icon="cube"></span>
               <h2>Kéo thả tệp CAD vào đây</h2>
               <p>STEP · IGES · SolidWorks (SLDPRT, SLDASM, SLDDRW) · DXF · STL · OBJ · glTF · 3MF</p>
-              <button class="btn primary" id="btn-empty-open">Mở tệp…</button>
+              <div class="btn-row center"><button class="btn primary" id="btn-empty-open">Mở tệp…</button><button class="btn" id="btn-empty-new">Dựng chi tiết mới</button></div>
               <p class="hint">Hoặc chọn <b>Tệp mẫu</b> trên thanh công cụ để thử ngay.</p>
             </div>
           </div>

@@ -18,6 +18,8 @@ import { icon } from '../ui/icons';
 import { ModelTree } from '../ui/Tree';
 import { explodePanel, infoPanel, massPanel, measurePanel, sectionPanel, type PanelContext } from '../ui/panels';
 import { mergeAssemblyReferences } from './assemblyLink';
+import { PartStudio } from '../modeling/PartStudio';
+import type { PartDocument } from '../modeling/types';
 
 type Tool = 'none' | 'measure' | 'section' | 'explode' | 'mass';
 
@@ -27,6 +29,8 @@ interface Doc {
   view: DocumentView;
   camera?: { pos: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; zoom: number; persp: boolean };
   displayMode: DisplayMode;
+  /** Parametric part being modeled in this document. */
+  studio?: PartStudio;
 }
 
 const BG = '#f4f7fb|#c9d3e0';
@@ -58,6 +62,7 @@ export class App {
     toolHost: document.getElementById('tool-panel')!,
     docTabs: document.getElementById('doc-tabs')!,
     sheetTabs: document.getElementById('sheet-tabs')!,
+    modelRibbon: document.getElementById('model-ribbon')!,
     status: document.getElementById('status-msg')!,
     statusSel: document.getElementById('status-sel')!,
     statusUnits: document.getElementById('status-units')!,
@@ -99,13 +104,13 @@ export class App {
     this.viewer.scene.add(this.gizmo.getHelper());
     window.addEventListener('cad-texture-loaded', () => this.viewer.requestRender());
 
-    this.el.fileInput.accept = ACCEPT;
+    this.el.fileInput.accept = ACCEPT + ',.cvpart';
     this.el.fileInput.addEventListener('change', () => {
       if (this.el.fileInput.files?.length) this.openFiles([...this.el.fileInput.files]);
       this.el.fileInput.value = '';
     });
     this.el.dirInput.addEventListener('change', () => {
-      if (this.el.dirInput.files?.length) this.openFiles([...this.el.dirInput.files].filter((f) => isSupported(f.name)));
+      if (this.el.dirInput.files?.length) this.openFiles([...this.el.dirInput.files].filter((f) => isSupported(f.name) || /\.cvpart$/i.test(f.name)));
       this.el.dirInput.value = '';
     });
     this.bindToolbar();
@@ -118,6 +123,17 @@ export class App {
 
   // ======================= documents =======================
   async openFiles(files: File[]) {
+    for (const f of files.filter((x) => /\.cvpart$/i.test(x.name))) {
+      try {
+        const doc = JSON.parse(await f.text()) as PartDocument;
+        if (doc.format !== 'cadviewer-part' || !Array.isArray(doc.features)) throw new Error('không phải tệp .cvpart');
+        this.newPart(doc);
+      } catch (e) {
+        toast(`Lỗi đọc ${f.name}: ${(e as Error).message}`, 'error');
+      }
+    }
+    files = files.filter((x) => !/\.cvpart$/i.test(x.name));
+    if (!files.length) return;
     const supported = files.filter((f) => isSupported(f.name));
     const skipped = files.length - supported.length;
     if (skipped) toast(`Bỏ qua ${skipped} tệp không hỗ trợ`, 'info');
@@ -142,9 +158,9 @@ export class App {
     this.busy(false);
   }
 
-  addDocument(model: LoadedModel) {
+  addDocument(model: LoadedModel, studio?: PartStudio) {
     const view = new DocumentView(model);
-    const doc: Doc = { id: this.nextId++, model, view, displayMode: model.is2D ? 'shaded' : 'shaded-edges' };
+    const doc: Doc = { id: this.nextId++, model, view, displayMode: model.is2D ? 'shaded' : 'shaded-edges', studio };
     this.docs.push(doc);
     this.activate(doc, true);
     for (const w of model.info.warnings.slice(0, 3)) toast(w, 'info', 8000);
@@ -153,6 +169,7 @@ export class App {
   private activate(doc: Doc | null, fresh = false) {
     if (this.active === doc && !fresh) return;
     this.setTool('none');
+    if (this.active?.studio?.editor && this.active !== doc) this.active.studio.exitSketch(true);
     if (this.active) {
       const c = this.viewer.camera;
       this.active.camera = {
@@ -171,6 +188,7 @@ export class App {
     this.explode.attach(null);
     if (!doc) {
       this.tree.render(null);
+      this.renderModelRibbon();
       clear(this.el.info);
       this.el.info.append(infoPanel(null));
       this.el.empty.hidden = false;
@@ -201,7 +219,7 @@ export class App {
       this.viewer.setPerspective(false);
       this.viewer.setView('front', box);
     } else this.viewer.setView('iso', box);
-    this.tree.render(doc.model);
+    this.renderTreePane();
     clear(this.el.info);
     this.el.info.append(infoPanel(doc.model));
     this.renderDocTabs();
@@ -221,6 +239,7 @@ export class App {
       this.active = null;
     }
     doc.view.dispose();
+    doc.studio?.dispose();
     this.docs.splice(i, 1);
     this.activate(this.docs[Math.min(i, this.docs.length - 1)] ?? null, true);
   }
@@ -239,6 +258,86 @@ export class App {
       tab.addEventListener('click', () => this.activate(d));
       this.el.docTabs.append(tab);
     }
+  }
+
+  // ======================= part modeling =======================
+  /** Create a new parametric part (or open a saved .cvpart). */
+  newPart(saved?: PartDocument) {
+    const n = this.docs.filter((d) => d.studio).length + 1;
+    let doc: Doc | null = null;
+    const studio = new PartStudio(
+      {
+        viewer: this.viewer,
+        setModel: (m) => doc && this.setDocumentModel(doc, m),
+        setStatus: (m) => this.setStatus(m),
+        showPanel: (el) => {
+          clear(this.el.toolHost);
+          this.el.toolHost.hidden = !el;
+          if (el) this.el.toolHost.append(el);
+        },
+        lastPick: () => (this.active === doc ? this.lastPick : null),
+        refreshUi: () => {
+          if (this.active === doc) {
+            this.renderTreePane();
+            this.renderModelRibbon();
+          }
+        },
+      },
+      saved ?? { format: 'cadviewer-part', version: 1, name: `Chi tiết ${n}`, features: [] },
+    );
+    const empty: LoadedModel = {
+      kind: 'part',
+      name: studio.name,
+      root: { name: studio.name, bodies: [], children: [] },
+      bodies: [],
+      info: { format: 'Chi tiết dựng hình', fileName: `${studio.name}.cvpart`, fileSize: 0, properties: {}, previews: [], references: [], warnings: [] },
+    };
+    this.addDocument(empty, studio);
+    doc = this.active;
+    if (saved) studio.regen();
+    else this.setStatus('Chi tiết mới: chọn một mặt phẳng trong cây (Front/Top/Right) rồi bấm "Sketch" để bắt đầu vẽ.');
+  }
+
+  /** Swap in regenerated geometry for a modeling document, keeping the camera. */
+  private setDocumentModel(doc: Doc, model: LoadedModel) {
+    const wasEmpty = !doc.model.bodies.length;
+    const isActive = this.active === doc;
+    if (isActive) {
+      this.explode.reset();
+      this.viewer.modelRoot.remove(doc.view.root);
+    }
+    doc.view.dispose();
+    doc.model = model;
+    doc.view = new DocumentView(model);
+    doc.view.setDisplayMode(doc.displayMode);
+    if (!isActive) return;
+    this.viewer.modelRoot.add(doc.view.root);
+    const sectionOn = this.section.active;
+    this.section.attach(doc.view);
+    this.section.setActive(sectionOn);
+    this.explode.attach(doc.view);
+    this.measure.clear();
+    const box = doc.view.bounds(false);
+    if (!box.isEmpty()) {
+      this.viewer.setModelBounds(box);
+      if (wasEmpty && !doc.studio?.editor) this.viewer.fit(box);
+    }
+    clear(this.el.info);
+    this.el.info.append(infoPanel(model));
+    this.viewer.requestRender();
+  }
+
+  private renderTreePane() {
+    const doc = this.active;
+    if (doc?.studio) doc.studio.renderTree(this.el.tree);
+    else this.tree.render(doc?.model ?? null);
+    this.renderModelRibbon();
+  }
+
+  private renderModelRibbon() {
+    const studio = this.active?.studio;
+    this.el.modelRibbon.hidden = !studio;
+    if (studio) studio.renderRibbon(this.el.modelRibbon);
   }
 
   /** Sheet tabs along the bottom of the viewport for multi-sheet drawings. */
@@ -489,6 +588,39 @@ export class App {
   // ======================= viewport interaction =======================
   private bindViewport() {
     const canvas = this.viewer.renderer.domElement;
+    // Sketch editing gets the pointer before the camera controls (capture phase).
+    let sketchDrag = false;
+    const studioOf = () => this.active?.studio?.editor ? this.active.studio : null;
+    this.el.viewport.addEventListener(
+      'pointerdown',
+      (e) => {
+        const st = studioOf();
+        if (!st || e.target !== canvas) return;
+        if (st.pointerDown(e)) {
+          sketchDrag = true;
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      },
+      true,
+    );
+    window.addEventListener('pointermove', (e) => {
+      const st = studioOf();
+      if (st && (sketchDrag || e.target === canvas)) st.pointerMove(e);
+    });
+    window.addEventListener('pointerup', (e) => {
+      if (!sketchDrag) return;
+      sketchDrag = false;
+      studioOf()?.pointerUp(e);
+    });
+    this.el.viewport.addEventListener(
+      'dblclick',
+      (e) => {
+        const st = studioOf();
+        if (st && st.dblClick()) e.stopPropagation();
+      },
+      true,
+    );
     let down: { x: number; y: number; button: number; t: number } | null = null;
     let hoverQueued: { x: number; y: number } | null = null;
     canvas.addEventListener('pointerdown', (e) => {
@@ -548,6 +680,10 @@ export class App {
   }
 
   private onClick(e: PointerEvent) {
+    if (this.active?.studio?.isPickingRefs) {
+      this.active.studio.handlePick(this.picker.pick(e.clientX, e.clientY, { faces: true, edges: true }));
+      return;
+    }
     if (this.facePickResolver) {
       this.facePickResolver(this.picker.pick(e.clientX, e.clientY, { faces: true }));
       return;
@@ -591,6 +727,8 @@ export class App {
     const on = (id: string, f: () => void) => document.getElementById(id)?.addEventListener('click', f);
     on('btn-open', () => this.el.fileInput.click());
     on('btn-open-dir', () => this.el.dirInput.click());
+    on('btn-new-part', () => this.newPart());
+    on('btn-empty-new', () => this.newPart());
     on('btn-empty-open', () => this.el.fileInput.click());
     on('btn-shot', () => this.screenshot());
     on('btn-export-stl', () => this.exportModel('stl'));
@@ -702,6 +840,10 @@ export class App {
     window.addEventListener('keydown', (e) => {
       const t = e.target as HTMLElement;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+      if (this.active?.studio?.key(e)) {
+        e.preventDefault();
+        return;
+      }
       if (e.ctrlKey && e.key.toLowerCase() === 'o') {
         e.preventDefault();
         this.el.fileInput.click();
@@ -900,7 +1042,7 @@ function saveNavSettings(v: Viewer) {
 
 async function readEntry(entry: FileSystemEntry): Promise<File[]> {
   if (entry.isFile) {
-    return new Promise((res) => (entry as FileSystemFileEntry).file((f) => res(isSupported(f.name) ? [f] : []), () => res([])));
+    return new Promise((res) => (entry as FileSystemFileEntry).file((f) => res(isSupported(f.name) || /\.cvpart$/i.test(f.name) ? [f] : []), () => res([])));
   }
   if (entry.isDirectory) {
     const reader = (entry as FileSystemDirectoryEntry).createReader();

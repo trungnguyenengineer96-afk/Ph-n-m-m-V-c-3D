@@ -24,7 +24,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 button, input, select { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
 
-#app { display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh; }
+#app { display: grid; grid-template-rows: auto auto auto 1fr auto; height: 100vh; }
 
 /* ---------- top bar / ribbon (CommandManager) ---------- */
 .topbar { display: flex; align-items: stretch; background: linear-gradient(#fdfdfe, #eef1f5); border-bottom: 1px solid var(--line); min-height: 64px; }
@@ -48,6 +48,38 @@ details.menu > summary::-webkit-details-marker { display: none; }
 .menu-pop button { text-align: left; padding: 7px 10px; border: 0; background: none; border-radius: 4px; cursor: pointer; }
 .menu-pop button:hover { background: var(--accent-soft); }
 .menu-pop button.active { font-weight: 600; color: var(--accent); }
+
+/* ---------- modeling CommandManager ---------- */
+.model-ribbon { display: flex; align-items: center; gap: 4px; padding: 3px 8px; background: #f2f5f9; border-bottom: 1px solid var(--line); overflow-x: auto; min-height: 50px; }
+.mtab { font-weight: 700; color: var(--accent); padding: 0 8px 0 2px; white-space: nowrap; }
+.mgroup { display: flex; align-items: center; gap: 1px; padding: 0 6px; border-left: 1px solid var(--line-2); }
+.mbtn { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 52px; padding: 3px 6px; border: 1px solid transparent; border-radius: 5px; background: none; cursor: pointer; font-size: 11px; white-space: nowrap; }
+.mbtn .ico svg { width: 20px; height: 20px; }
+.mbtn:hover:not(:disabled) { background: var(--accent-soft); border-color: #bcd3f6; }
+.mbtn.active { background: #cfe0fa; border-color: #8db4ee; }
+.mbtn:disabled { opacity: 0.4; cursor: default; }
+.mlabel { font-size: 11px; color: var(--muted); padding: 0 6px; white-space: nowrap; }
+.sk-state { margin-left: auto; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 10px; white-space: nowrap; }
+.sk-state.full { background: #e4f4ea; color: #146c3b; }
+.sk-state.under { background: #e3ecfb; color: #1450c8; }
+.sk-state.bad { background: #fde8e8; color: var(--danger); }
+.tree-row.error .tree-name { color: var(--danger); }
+.tree-err { color: var(--danger); }
+.tree-hint { padding: 8px 6px; }
+.btn-row.center { justify-content: center; }
+
+/* ---------- sketch annotations ---------- */
+.sk-dim { background: rgba(255, 255, 255, 0.92); color: #134a9e; border: 1px solid #9ab9ea; border-radius: 3px; padding: 0 4px; font-size: 12px; font-weight: 600; pointer-events: auto; cursor: pointer; user-select: none; }
+.sk-dim.selected { color: #c25b00; border-color: #ff8a00; }
+.sk-rel { background: #fff8d6; color: #6b5200; border: 1px solid #e3c25a; border-radius: 3px; padding: 0 3px; font-size: 11px; line-height: 14px; pointer-events: auto; cursor: pointer; user-select: none; }
+.sk-rel.selected { border-color: #ff8a00; background: #ffe2bf; }
+.sk-hint { color: #1f7a32; font-size: 11px; font-weight: 600; white-space: nowrap; text-shadow: 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; }
+.dim-popup { position: fixed; z-index: 150; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px; background: #fff; border: 1px solid #8db4ee; border-radius: 6px; box-shadow: var(--shadow); max-width: 220px; }
+.dim-popup input { width: 96px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; text-align: right; }
+.dim-popup .ok { border: 0; background: var(--ok); color: #fff; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+.dim-modes { display: flex; gap: 2px; width: 100%; }
+.dim-modes button { flex: 1; border: 1px solid var(--line); background: #fff; border-radius: 4px; font-size: 11px; padding: 2px; cursor: pointer; }
+.dim-modes button.active { background: var(--accent-soft); border-color: #8db4ee; }
 
 /* ---------- document tabs ---------- */
 .doc-tabs { display: flex; gap: 2px; padding: 0 6px; background: #e3e7ed; border-bottom: 1px solid var(--line); min-height: 30px; overflow-x: auto; }

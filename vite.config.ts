@@ -19,7 +19,7 @@ export default defineConfig(() => {
     base: './',
     worker: { format: 'es' as const },
     // Worker-only CommonJS deps: pre-bundle at startup so the first file load does not trigger a reload.
-    optimizeDeps: { include: ['pako', 'cfb', 'dxf-parser'] },
+    optimizeDeps: { include: ['pako', 'cfb', 'dxf-parser'], exclude: ['replicad-opencascadejs', '@salusoft89/planegcs'] },
     build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
     test: { environment: 'node' as const },
   };
