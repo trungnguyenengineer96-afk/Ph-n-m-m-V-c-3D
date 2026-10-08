@@ -182,19 +182,23 @@ export class DocumentView {
   }
 
   private buildSheets(sheets: ImageData2[]) {
-    let x = 0;
+    // One sheet is shown at a time (see setSheet), all centred on the origin.
     sheets.forEach((s) => {
       const tex = imageTexture(s);
       if (!tex) return;
       const { w, h } = tex.userData as { w: number; h: number };
-      // Present sheets 1 px = 1 unit; layout side by side.
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-      mesh.position.set(x + w / 2, -h / 2, 0);
       mesh.name = s.name;
-      x += w + 40;
+      mesh.visible = this.sheetObjects.length === 0;
       this.root.add(mesh);
       this.sheetObjects.push(mesh);
     });
+  }
+
+  activeSheet = 0;
+  setSheet(i: number) {
+    this.activeSheet = Math.max(0, Math.min(this.sheetObjects.length - 1, i));
+    this.sheetObjects.forEach((m, k) => (m.visible = k === this.activeSheet));
   }
 
   get is2D() {
@@ -209,7 +213,7 @@ export class DocumentView {
       const b = m.geometry.boundingBox!.clone().applyMatrix4(m.matrixWorld);
       box.union(b);
     }
-    for (const o of [...this.lineObjects, ...this.sheetObjects]) {
+    for (const o of [...this.lineObjects, ...this.sheetObjects.filter((m) => m.visible)]) {
       o.geometry.computeBoundingBox();
       box.union(o.geometry.boundingBox!.clone().applyMatrix4(o.matrixWorld));
     }

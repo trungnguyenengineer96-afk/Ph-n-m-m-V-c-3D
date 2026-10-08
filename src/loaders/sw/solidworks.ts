@@ -17,6 +17,7 @@ import { chainSegments, DisjointSet } from '../../core/geometry';
 import { readContainer, textOf, unwrapLegacyZlb, type SwContainer } from './container';
 import { parseDisplayLists, type DlFace } from './displaylists';
 import { decodeDib } from './dib';
+import { buildAssembly } from './assembly';
 
 const M_TO_MM = 1000;
 
@@ -209,7 +210,9 @@ export function loadSolidWorks(buf: Uint8Array, fileName: string): LoadedModel {
       if (img) previews.push({ name: s.name, rgba: img.rgba, width: img.width, height: img.height });
     }
   }
-  info.previews = previews;
+  // Main preview first; per-configuration previews are often blank placeholders.
+  previews.sort((a, b) => rank(a.name) - rank(b.name));
+  info.previews = previews.filter((p, i) => i === 0 || !/^Config-\d+-Preview/.test(p.name));
 
   // ---- geometry ----
   const dlStreams = c.streams.filter((s) => /displaylists?(__zlb)?$/i.test(s.name.split('/').pop() || ''));
@@ -231,12 +234,38 @@ export function loadSolidWorks(buf: Uint8Array, fileName: string): LoadedModel {
   const references = kind === 'part' ? [] : findReferences(c, fileName);
   info.references = references;
 
-  const root: ModelNode = { name: baseName, bodies: [], children: [] };
-  if (bodies.length === 1) root.bodies = [0];
-  else bodies.forEach((b, i) => root.children.push({ name: b.name.replace(`${baseName} — `, ''), bodies: [i], children: [] }));
+  let root: ModelNode = { name: baseName, bodies: [], children: [] };
+  // Assemblies: component tree with placements, and cached part tessellations.
+  const asm = kind === 'assembly' ? buildAssembly(c.streams, baseName) : null;
+  if (asm && asm.root.children.length) {
+    bodies.length = 0;
+    bodies.push(...asm.bodies);
+    root = asm.root;
+    info.properties['Cấu hình đang dùng'] = asm.configName;
+    info.properties['Số thành phần'] = String(asm.instanceCount);
+    const missing = countMissing(root);
+    if (missing)
+      info.warnings.push(
+        `${missing} thành phần không có lưới lưu sẵn trong tệp lắp ráp. Mở kèm các tệp chi tiết (hoặc cả thư mục) để nạp — chúng sẽ được đặt đúng vị trí.`,
+      );
+  } else {
+    if (bodies.length === 1) root.bodies = [0];
+    else bodies.forEach((b, i) => root.children.push({ name: b.name.replace(`${baseName} — `, ''), bodies: [i], children: [] }));
+    if (kind !== 'part') {
+      for (const r of references)
+        root.children.push({ name: r, bodies: [], children: [], missing: true, refFile: r, note: 'Tham chiếu — mở kèm tệp này để nạp' });
+    }
+  }
 
-  if (kind !== 'part') {
-    for (const r of references) root.children.push({ name: r, bodies: [], children: [], missing: true, note: 'Tham chiếu — mở kèm tệp này để nạp' });
+  // Drawings: one image per sheet, named from SheetPreviews/SheetNames when present.
+  if (kind === 'drawing') {
+    const sheets = drawingSheets(c);
+    if (sheets.length) {
+      info.previews = previews.filter((p) => !/^Images\/Sheet_/.test(p.name)).concat(sheets.slice(0, 1));
+      info.properties['Số trang bản vẽ'] = String(sheets.length);
+      previews.length = 0;
+      previews.push(...sheets);
+    }
   }
 
   if (!bodies.length) {
@@ -246,11 +275,11 @@ export function loadSolidWorks(buf: Uint8Array, fileName: string): LoadedModel {
       );
     else if (kind === 'assembly')
       info.warnings.push(
-        'Tệp lắp ráp SolidWorks chỉ lưu tham chiếu tới các chi tiết. Hãy mở cùng lúc tệp .SLDASM và các tệp .SLDPRT (hoặc cả thư mục) để nạp hình học; vị trí lắp (mates) chưa giải mã được — để có lắp ráp chính xác hãy xuất STEP từ SolidWorks.',
+        'Tệp lắp ráp này không có cây thành phần đọc được (phiên bản cũ?). Hãy mở cùng lúc tệp .SLDASM và các tệp .SLDPRT, hoặc xuất STEP từ SolidWorks.',
       );
     else
       info.warnings.push(
-        'Bản vẽ SolidWorks hiển thị bằng ảnh trang lưu sẵn trong tệp. Hình học vector của bản vẽ chưa giải mã được — xuất DXF/DWG từ SolidWorks để đo trên bản vẽ.',
+        'Bản vẽ SolidWorks hiển thị bằng ảnh trang lưu sẵn trong tệp (độ phân giải do SolidWorks lưu). Để đo chính xác trên bản vẽ hãy xuất DXF từ SolidWorks.',
       );
   }
 
@@ -259,3 +288,46 @@ export function loadSolidWorks(buf: Uint8Array, fileName: string): LoadedModel {
   return model;
 }
 
+
+function countMissing(n: ModelNode): number {
+  return (n.missing ? 1 : 0) + n.children.reduce((s, c) => s + countMissing(c), 0);
+}
+
+/** Read an MFC CString list (u16/u32 count, then 0xFF 0xFE 0xFF + length + UTF-16LE). */
+function readCStrings(d: Uint8Array): string[] {
+  const out: string[] = [];
+  for (let o = 0; o + 4 <= d.length; ) {
+    if (d[o] === 0xff && d[o + 1] === 0xfe && d[o + 2] === 0xff) {
+      let n = d[o + 3];
+      let p = o + 4;
+      if (n === 0xff) {
+        n = d[p] | (d[p + 1] << 8);
+        p += 2;
+      }
+      let s = '';
+      for (let i = 0; i < n && p + 2 * i + 1 < d.length; i++) s += String.fromCharCode(d[p + 2 * i] | (d[p + 2 * i + 1] << 8));
+      out.push(s);
+      o = p + 2 * n;
+    } else o++;
+  }
+  return out;
+}
+
+function drawingSheets(c: SwContainer): ImageData2[] {
+  const imgs = c.streams
+    .map((s) => ({ s, m: /^Images\/Sheet_(\d+)$/.exec(s.name) }))
+    .filter((x) => x.m && isPng(x.s.data))
+    .sort((a, b) => Number(a.m![1]) - Number(b.m![1]));
+  const namesStream = c.streams.find((s) => /SheetNames$/i.test(s.name));
+  const names = namesStream ? readCStrings(namesStream.data) : [];
+  // SheetNames does not always list every sheet; only trust it when the counts agree.
+  const useNames = names.length === imgs.length;
+  return imgs.map((x, i) => ({ name: useNames ? names[i] : `Trang ${Number(x.m![1]) + 1}`, png: x.s.data }));
+}
+
+function rank(name: string) {
+  if (name === 'PreviewPNG') return 0;
+  if (name === 'Preview') return 1;
+  if (/^Images\//.test(name)) return 3;
+  return 2;
+}

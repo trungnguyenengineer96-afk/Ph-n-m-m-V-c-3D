@@ -18,8 +18,8 @@ Phần mềm xem và đánh giá mô hình CAD chạy trên trình duyệt, giao
 | STEP `.step/.stp` (AP203/AP214/AP242) | Hình học B-rep chính xác, cây lắp ráp, vị trí, màu | Dùng OpenCascade (WebAssembly) |
 | IGES `.igs/.iges`, BREP `.brep` | Hình học, màu | OpenCascade |
 | SolidWorks Part `.SLDPRT` (2011 →) | Lưới hiển thị đúng như SolidWorks lưu, cạnh B-rep, loại mặt (phẳng/trụ/côn) với **bán kính chính xác**, nhiều thân, ảnh xem trước, thuộc tính tuỳ biến | Đọc trực tiếp, không cần cài SolidWorks |
-| SolidWorks Assembly `.SLDASM` | Danh sách chi tiết tham chiếu, ảnh xem trước. Mở kèm các `.SLDPRT` (hoặc STEP cùng tên) để nạp hình học | Vị trí lắp (mates) **chưa** giải mã được, xem phần Giới hạn |
-| SolidWorks Drawing `.SLDDRW` | Ảnh các trang bản vẽ lưu trong tệp, tham chiếu mô hình | Nét vector chưa giải mã được |
+| SolidWorks Assembly `.SLDASM` (2015 →) | Cây lắp ráp đầy đủ (cụm con, cấu hình đang dùng), **vị trí từng chi tiết** và lưới hình học lưu sẵn trong tệp. Hiển thị được lắp ráp **không cần tệp chi tiết**. Chi tiết nào thiếu lưới thì mở kèm `.SLDPRT` (hoặc STEP cùng tên) để tự nạp vào đúng vị trí | Màu/appearance chưa đọc được |
+| SolidWorks Drawing `.SLDDRW` | Toàn bộ các trang bản vẽ (ảnh trang lưu trong tệp), chuyển trang bằng thanh tab hoặc PageUp/PageDown | Nét vector chưa giải mã được; ảnh trang có độ phân giải 640×480 do SolidWorks lưu |
 | DXF `.dxf` | LINE, (LW)POLYLINE có bulge, CIRCLE, ARC, ELLIPSE, SPLINE, TEXT/MTEXT, INSERT (block), DIMENSION | Đo trên bản vẽ 2D |
 | STL, OBJ, glTF/GLB, 3MF, PLY | Lưới tam giác | "Mặt" được nhận dạng theo góc pháp tuyến |
 
@@ -69,8 +69,8 @@ Trên thanh công cụ có menu **Tệp mẫu** gồm một lắp ráp STEP, cá
 Định dạng SolidWorks là định dạng độc quyền và không có tài liệu công khai. Phần mềm này đọc những phần đã được nghiên cứu công khai:
 
 - **SLDPRT**: hình hiển thị là lưới tam giác do SolidWorks lưu sẵn. Vì vậy đo trên mặt cong là đo trên lưới, trừ mặt trụ và mặt côn: bán kính của chúng lấy chính xác từ tệp. Không đọc được cây feature, sketch hay cấu hình. Tệp trước SolidWorks 2011 chỉ hiện được ảnh xem trước.
-- **SLDASM**: tệp lắp ráp chỉ lưu đường dẫn tới chi tiết. Khi mở kèm các chi tiết, mỗi chi tiết được đặt theo hệ toạ độ riêng của nó vì vị trí lắp chưa giải mã được. Để có lắp ráp đúng vị trí, hãy xuất **STEP** từ SolidWorks (*File → Save As → STEP AP214*). Phần mềm đọc đầy đủ cây lắp ráp và vị trí trong tệp STEP.
-- **SLDDRW**: hiển thị ảnh trang bản vẽ lưu trong tệp. Để đo trên bản vẽ, hãy xuất **DXF**. DWG chưa được hỗ trợ.
+- **SLDASM**: đọc được cây thành phần, vị trí và lưới lưu sẵn (cấu trúc `COMPINSTANCETREE` và `FaceTessellations`, kiểm chứng trên tệp SolidWorks 2023). Chưa đọc được ràng buộc (mates) dưới dạng có thể chỉnh sửa, và chưa đọc được màu.
+- **SLDDRW**: hiển thị ảnh các trang bản vẽ lưu trong tệp. Để đo trên bản vẽ, hãy xuất **DXF**. DWG chưa được hỗ trợ.
 - Thể tích và khối lượng tính trên lưới tam giác. Sai số phụ thuộc độ mịn lưới, chỉnh trong *Cài đặt → Độ mịn lưới* cho STEP/IGES.
 
 ## Cấu trúc mã nguồn

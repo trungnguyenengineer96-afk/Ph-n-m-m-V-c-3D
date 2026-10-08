@@ -57,6 +57,7 @@ export class App {
     info: document.getElementById('info')!,
     toolHost: document.getElementById('tool-panel')!,
     docTabs: document.getElementById('doc-tabs')!,
+    sheetTabs: document.getElementById('sheet-tabs')!,
     status: document.getElementById('status-msg')!,
     statusSel: document.getElementById('status-sel')!,
     statusUnits: document.getElementById('status-units')!,
@@ -174,6 +175,7 @@ export class App {
       this.el.info.append(infoPanel(null));
       this.el.empty.hidden = false;
       this.renderDocTabs();
+      this.renderSheetTabs();
       this.viewer.requestRender();
       return;
     }
@@ -203,6 +205,7 @@ export class App {
     clear(this.el.info);
     this.el.info.append(infoPanel(doc.model));
     this.renderDocTabs();
+    this.renderSheetTabs();
     this.syncDisplayButtons();
     this.viewer.requestRender();
   }
@@ -236,6 +239,31 @@ export class App {
       tab.addEventListener('click', () => this.activate(d));
       this.el.docTabs.append(tab);
     }
+  }
+
+  /** Sheet tabs along the bottom of the viewport for multi-sheet drawings. */
+  private renderSheetTabs() {
+    const host = this.el.sheetTabs;
+    clear(host);
+    const view = this.active?.view;
+    const n = view?.sheetObjects.length ?? 0;
+    host.hidden = n < 2;
+    if (!view || n < 2) return;
+    view.sheetObjects.forEach((m, i) => {
+      const b = h('button', { class: 'sheet-tab' + (i === view.activeSheet ? ' active' : ''), title: m.name }, m.name);
+      b.addEventListener('click', () => this.showSheet(i));
+      host.append(b);
+    });
+  }
+
+  private showSheet(i: number) {
+    const view = this.active?.view;
+    if (!view || !view.sheetObjects.length) return;
+    view.setSheet(i);
+    this.el.sheetTabs.querySelectorAll('.sheet-tab').forEach((b, k) => b.classList.toggle('active', k === view.activeSheet));
+    this.el.sheetTabs.querySelectorAll('.sheet-tab')[view.activeSheet]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    this.viewer.fit(view.bounds(), false);
+    this.setStatus(`${view.sheetObjects[view.activeSheet].name} (${view.activeSheet + 1}/${view.sheetObjects.length})`);
   }
 
   // ======================= tools =======================
@@ -689,6 +717,11 @@ export class App {
         else if (e.key === 'ArrowRight') c.rotateBy(step, 0);
         else if (e.key === 'ArrowUp') c.rotateBy(0, -step);
         else if (e.key === 'ArrowDown') c.rotateBy(0, step);
+        return;
+      }
+      if ((e.key === 'PageDown' || e.key === 'PageUp') && this.active?.view.sheetObjects.length) {
+        e.preventDefault();
+        this.showSheet(this.active.view.activeSheet + (e.key === 'PageDown' ? 1 : -1));
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;

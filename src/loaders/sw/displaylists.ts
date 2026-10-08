@@ -18,6 +18,8 @@
  */
 
 export interface DlFace {
+  /** Byte offset of the face record in the parsed stream. */
+  offset: number;
   positions: Float32Array; // metres
   normals: Float32Array;
   indices: Uint32Array;
@@ -95,7 +97,7 @@ const MAX_VERTICES = 4_000_000;
 
 export function parseDisplayLists(dl: Uint8Array, legacy: boolean): DlResult {
   const r = new Reader(dl);
-  const faces: (DlFace & { geometryEnd: number; offset: number })[] = [];
+  const faces: (DlFace & { geometryEnd: number })[] = [];
   const warnings: string[] = [];
   let rejected = 0;
   let totalVertices = 0;

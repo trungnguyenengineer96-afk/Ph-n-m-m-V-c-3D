@@ -87,6 +87,10 @@ export interface ModelNode {
   missing?: boolean;
   /** Component inserted from a separately opened file. */
   linked?: boolean;
+  /** File name this component comes from (assemblies), used to link part files. */
+  refFile?: string;
+  /** Component is hidden in the source assembly. */
+  hiddenInSource?: boolean;
   note?: string;
 }
 
