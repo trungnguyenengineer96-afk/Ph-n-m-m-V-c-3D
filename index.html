@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Phần mềm xem CAD 3D: STEP, SolidWorks SLDPRT/SLDASM/SLDDRW, DXF — đo đạc, mặt cắt, tách rời." />
+    <title>CAD Viewer 3D</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 3 7v10l9 5 9-5V7z' fill='%23d22630'/%3E%3Cpath d='M3 7l9 5 9-5M12 12v10' stroke='white' stroke-width='1.5' fill='none'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand"><span class="logo"></span><b>CAD Viewer 3D</b></div>
+        <div class="ribbon">
+          <div class="rgroup">
+            <button class="rbtn" id="btn-open" title="Mở tệp (Ctrl+O)"><span class="ico" data-icon="open"></span><span>Mở tệp</span></button>
+            <button class="rbtn" id="btn-open-dir" title="Mở cả thư mục (lắp ráp SolidWorks + chi tiết)"><span class="ico" data-icon="folder"></span><span>Mở thư mục</span></button>
+            <details class="menu">
+              <summary class="rbtn" title="Mở tệp mẫu"><span class="ico" data-icon="samples"></span><span>Tệp mẫu ▾</span></summary>
+              <div class="menu-pop">
+                <button data-sample="as1_pe_203_assembly.stp">Lắp ráp STEP — AS1 (CAx-IF)</button>
+                <button data-sample="C04_cube_hole_5mm.SLDPRT">SolidWorks SLDPRT — Khối có lỗ</button>
+                <button data-sample="C15_torus.SLDPRT">SolidWorks SLDPRT — Xuyến (torus)</button>
+                <button data-sample="C10_cube_shell_1mm.SLDPRT">SolidWorks 2011 SLDPRT — Vỏ mỏng</button>
+                <button data-sample="C04_cube_hole_5mm.step">STEP — Khối có lỗ</button>
+                <button data-sample="demo_flange.dxf">Bản vẽ DXF — Mặt bích</button>
+              </div>
+            </details>
+          </div>
+          <div class="rgroup">
+            <button class="rbtn" data-tool="measure" title="Đo (M)"><span class="ico" data-icon="measure"></span><span>Đo</span></button>
+            <button class="rbtn" data-tool="mass" title="Thuộc tính khối lượng"><span class="ico" data-icon="mass"></span><span>Khối lượng</span></button>
+            <button class="rbtn" data-tool="section" title="Mặt cắt (S)"><span class="ico" data-icon="section"></span><span>Mặt cắt</span></button>
+            <button class="rbtn" data-tool="explode" title="Tách rời (E)"><span class="ico" data-icon="explode"></span><span>Tách rời</span></button>
+          </div>
+          <div class="rgroup">
+            <button class="rbtn" id="btn-shot" title="Chụp ảnh màn hình PNG"><span class="ico" data-icon="camera"></span><span>Chụp ảnh</span></button>
+            <details class="menu">
+              <summary class="rbtn" title="Xuất mô hình"><span class="ico" data-icon="export"></span><span>Xuất ▾</span></summary>
+              <div class="menu-pop">
+                <button id="btn-export-stl">Xuất STL (mm)</button>
+                <button id="btn-export-glb">Xuất glTF / GLB</button>
+              </div>
+            </details>
+          </div>
+          <div class="rgroup end">
+            <button class="rbtn" id="btn-settings" title="Cài đặt"><span class="ico" data-icon="settings"></span><span>Cài đặt</span></button>
+            <button class="rbtn" id="btn-help" title="Hướng dẫn"><span class="ico" data-icon="help"></span><span>Trợ giúp</span></button>
+          </div>
+        </div>
+      </header>
+      <div class="doc-tabs" id="doc-tabs"></div>
+      <main class="main">
+        <aside class="left">
+          <div class="left-tabs">
+            <button class="ltab active" data-tab="tree" title="Cây mô hình (FeatureManager)"><span class="ico" data-icon="tree"></span>Cây mô hình</button>
+            <button class="ltab" data-tab="info" title="Thông tin tệp"><span class="ico" data-icon="info"></span>Thông tin</button>
+          </div>
+          <div class="left-pane" data-pane="tree" id="tree"></div>
+          <div class="left-pane" data-pane="info" id="info" hidden></div>
+        </aside>
+        <section class="viewport" id="viewport">
+          <div class="hud">
+            <button class="hbtn" id="hud-fit" title="Vừa màn hình (F)"><span class="ico" data-icon="fit"></span></button>
+            <details class="menu">
+              <summary class="hbtn" title="Hướng nhìn"><span class="ico" data-icon="cube"></span>▾</summary>
+              <div class="menu-pop">
+                <button data-view="front">Trước (Front) — 1</button>
+                <button data-view="back">Sau (Back) — 2</button>
+                <button data-view="left">Trái (Left) — 3</button>
+                <button data-view="right">Phải (Right) — 4</button>
+                <button data-view="top">Trên (Top) — 5</button>
+                <button data-view="bottom">Dưới (Bottom) — 6</button>
+                <button data-view="iso">Isometric — 7</button>
+                <button data-view="dimetric">Dimetric</button>
+                <button data-view="trimetric">Trimetric</button>
+                <button data-view="normal">Vuông góc mặt chọn (Normal To) — 8</button>
+              </div>
+            </details>
+            <details class="menu">
+              <summary class="hbtn" title="Kiểu hiển thị"><span class="ico" data-icon="display"></span>▾</summary>
+              <div class="menu-pop">
+                <button data-display="shaded-edges">Tô bóng có cạnh (Shaded with Edges)</button>
+                <button data-display="shaded">Tô bóng (Shaded)</button>
+                <button data-display="hlr">Ẩn nét khuất (Hidden Lines Removed)</button>
+                <button data-display="wireframe">Khung dây (Wireframe)</button>
+                <button data-display="transparent">Trong suốt</button>
+              </div>
+            </details>
+            <button class="hbtn" id="hud-section" title="Bật/tắt mặt cắt (S)"><span class="ico" data-icon="section"></span></button>
+            <button class="hbtn" id="hud-persp" title="Phối cảnh (P)"><span class="ico" data-icon="persp"></span></button>
+          </div>
+          <div class="tool-panel" id="tool-panel" hidden></div>
+          <div class="empty-state" id="empty-state">
+            <div class="empty-card">
+              <span class="ico big" data-icon="cube"></span>
+              <h2>Kéo thả tệp CAD vào đây</h2>
+              <p>STEP · IGES · SolidWorks (SLDPRT, SLDASM, SLDDRW) · DXF · STL · OBJ · glTF · 3MF</p>
+              <button class="btn primary" id="btn-empty-open">Mở tệp…</button>
+              <p class="hint">Hoặc chọn <b>Tệp mẫu</b> trên thanh công cụ để thử ngay.</p>
+            </div>
+          </div>
+          <div class="busy" id="busy" hidden><div class="spinner"></div><span class="busy-text"></span></div>
+        </section>
+      </main>
+      <footer class="statusbar">
+        <span id="status-msg"></span>
+        <span id="status-sel" class="sel"></span>
+        <span id="status-units" class="units"></span>
+      </footer>
+    </div>
+    <div class="drop-overlay" id="drop-overlay" hidden><div>Thả tệp hoặc thư mục để mở</div></div>
+    <input type="file" id="file-input" multiple hidden />
+    <input type="file" id="dir-input" webkitdirectory multiple hidden />
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

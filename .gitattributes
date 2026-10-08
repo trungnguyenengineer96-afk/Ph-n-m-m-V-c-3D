@@ -1,0 +1,7 @@
+*.SLDPRT binary
+*.sldprt binary
+*.SLDASM binary
+*.SLDDRW binary
+*.stp text eol=lf
+*.step text eol=lf
+*.dxf text eol=lf

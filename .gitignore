@@ -1,0 +1,6 @@
+node_modules/
+dist/
+public/occt/occt-import-js.js
+public/occt/occt-import-js.wasm
+*.log
+.DS_Store
